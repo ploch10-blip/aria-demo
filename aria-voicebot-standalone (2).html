@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIA · IT-Support Voice-Bot Demo</title>
+<style>
+  :root {
+    --red:#E2001A; --bg:#15181D; --panel:#232830; --soft:#2A303A;
+    --fog:#9AA3AE; --paper:#F5F6F7; --green:#2FBF71; --amber:#F5A623;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--paper); font-family:'Avenir Next','Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 20px; border-bottom:1px solid var(--soft); display:flex; align-items:center; gap:14px; }
+  .avatar { width:42px; height:42px; border-radius:50%; background:var(--red); display:grid; place-items:center; font-weight:800; letter-spacing:1px; }
+  .htitle { font-weight:700; font-size:15px; }
+  .hsub { font-size:12px; color:var(--fog); }
+  .timer { font-variant-numeric:tabular-nums; font-size:13px; color:var(--green); display:flex; align-items:center; gap:6px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--green); }
+  .wave { display:flex; align-items:center; gap:3px; height:28px; }
+  .wave span { width:3px; border-radius:2px; background:var(--soft); }
+  .wave.active span { background:var(--red); animation:wv .9s infinite ease-in-out alternate; }
+  .wave span:nth-child(2){animation-delay:.1s} .wave span:nth-child(3){animation-delay:.2s}
+  .wave span:nth-child(4){animation-delay:.3s} .wave span:nth-child(5){animation-delay:.4s}
+  .wave span:nth-child(6){animation-delay:.5s} .wave span:nth-child(7){animation-delay:.6s}
+  @keyframes wv { from{transform:scaleY(.4)} to{transform:scaleY(1.2)} }
+  @media (prefers-reduced-motion:reduce){ .wave span{animation:none!important} }
+  .toggle { background:var(--soft); border:1px solid var(--soft); color:var(--paper); border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; }
+  .toggle.off { background:transparent; color:var(--fog); }
+  main { flex:1; display:flex; min-height:0; flex-wrap:wrap; }
+  #transcript { flex:2 1 380px; display:flex; flex-direction:column; padding:20px; gap:12px; overflow-y:auto; }
+  .eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:2px; color:var(--fog); }
+  .msg { max-width:78%; }
+  .msg .who { font-size:10px; color:var(--fog); margin-bottom:3px; text-transform:uppercase; letter-spacing:1.5px; }
+  .msg .bubble { padding:10px 14px; font-size:14px; line-height:1.45; }
+  .msg.user { align-self:flex-end; } .msg.user .who { text-align:right; }
+  .msg.user .bubble { background:var(--soft); border-radius:14px 14px 4px 14px; }
+  .msg.aria .bubble { background:var(--red); border-radius:14px 14px 14px 4px; }
+  #welcome { margin:auto; text-align:center; max-width:440px; }
+  #welcome h2 { font-size:22px; margin-bottom:8px; }
+  #welcome p { color:var(--fog); font-size:14px; margin-bottom:20px; }
+  .sample { display:block; width:100%; background:var(--panel); border:1px solid var(--soft); color:var(--paper); border-radius:10px; padding:10px 14px; font-size:13px; text-align:left; cursor:pointer; margin-bottom:8px; }
+  aside { flex:1 1 280px; border-left:1px solid var(--soft); padding:20px; background:var(--panel); overflow-y:auto; }
+  .field { margin-bottom:12px; }
+  .field .lbl { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--fog); margin-bottom:2px; }
+  .field .val { font-size:13px; line-height:1.4; }
+  .prio { color:#fff; border-radius:6px; padding:2px 8px; font-size:12px; font-weight:700; float:right; }
+  .esk { margin-top:10px; background:var(--red); border-radius:8px; padding:8px 12px; font-size:13px; font-weight:700; }
+  footer { padding:14px 20px; border-top:1px solid var(--soft); display:flex; gap:10px; align-items:center; }
+  #input { flex:1; background:var(--panel); border:1px solid var(--soft); border-radius:24px; padding:12px 18px; color:var(--paper); font-size:14px; outline:none; }
+  #micBtn { background:var(--panel); border:1px solid var(--soft); color:#fff; border-radius:50%; width:46px; height:46px; font-size:18px; cursor:pointer; flex-shrink:0; }
+  #micBtn.listening { background:var(--red); border-color:var(--red); animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(226,0,26,.5)} 50%{box-shadow:0 0 0 10px rgba(226,0,26,0)} }
+  #sendBtn { background:var(--red); border:none; color:#fff; border-radius:24px; padding:12px 22px; font-weight:700; font-size:14px; cursor:pointer; }
+  #sendBtn:disabled { opacity:.6; cursor:default; }
+  /* API-Key Overlay */
+  #keyOverlay { position:fixed; inset:0; background:rgba(21,24,29,.96); display:grid; place-items:center; z-index:10; }
+  #keyBox { background:var(--panel); border:1px solid var(--soft); border-radius:14px; padding:28px; max-width:440px; width:90%; }
+  #keyBox h2 { font-size:18px; margin-bottom:10px; }
+  #keyBox p { font-size:13px; color:var(--fog); line-height:1.5; margin-bottom:16px; }
+  #keyInput { width:100%; background:var(--bg); border:1px solid var(--soft); border-radius:8px; padding:11px 14px; color:var(--paper); font-size:13px; outline:none; margin-bottom:12px; font-family:monospace; }
+  #keyBtn { width:100%; background:var(--red); border:none; color:#fff; border-radius:8px; padding:11px; font-weight:700; font-size:14px; cursor:pointer; }
+  .hint { font-size:11px; color:var(--fog); margin-top:10px; }
+  .typing { color:var(--fog); font-size:13px; font-style:italic; }
+</style>
+</head>
+<body>
+
+<div id="keyOverlay">
+  <div id="keyBox">
+    <h2>🔑 API-Keys</h2>
+    <p><strong>Anthropic-Key (Pflicht)</strong> für ARIAs Intelligenz. Optional: <strong>ElevenLabs</strong> für natürliche Stimme und <strong>OpenAI</strong> für Whisper-Spracherkennung (versteht auch Schweizerdeutsch deutlich besser). Ohne optionale Keys nutzt die Demo die einfacheren Browser-Funktionen. Alle Keys bleiben im Browser-Speicher dieser Seite.</p>
+    <input id="keyInput" type="password" placeholder="Anthropic: sk-ant-... (Pflicht)">
+    <input id="elKeyInput" type="password" placeholder="ElevenLabs API-Key (optional, bessere Stimme)" style="width:100%;background:var(--bg);border:1px solid var(--soft);border-radius:8px;padding:11px 14px;color:var(--paper);font-size:13px;outline:none;margin-bottom:12px;font-family:monospace">
+    <input id="oaKeyInput" type="password" placeholder="OpenAI API-Key (optional, Whisper-STT)" style="width:100%;background:var(--bg);border:1px solid var(--soft);border-radius:8px;padding:11px 14px;color:var(--paper);font-size:13px;outline:none;margin-bottom:12px;font-family:monospace">
+    <button id="keyBtn" onclick="saveKey()">Demo starten</button>
+    <div class="hint">Hinweis: Mikrofon-Freigabe wird beim ersten Klick auf 🎙 abgefragt. Am besten in Chrome oder Edge öffnen.</div>
+  </div>
+</div>
+
+<header>
+  <div class="avatar">AR</div>
+  <div style="flex:1">
+    <div class="htitle">ARIA · IT-Support-Hotline</div>
+    <div class="hsub">OBT System Solutions · Lokale Demo</div>
+  </div>
+  <div class="wave" id="wave"><span style="height:10px"></span><span style="height:18px"></span><span style="height:26px"></span><span style="height:16px"></span><span style="height:22px"></span><span style="height:12px"></span><span style="height:20px"></span></div>
+  <button class="toggle" id="ttsToggle" onclick="toggleTTS()">🔊 Ein</button>
+  <div class="timer"><span class="dot"></span><span id="timer">00:00</span></div>
+</header>
+
+<main>
+  <div id="transcript">
+    <div class="eyebrow">Live-Transkript</div>
+    <div id="welcome">
+      <h2>«Grüezi, hie isch ARIA.»</h2>
+      <p>Sprich über das Mikrofon 🎙 oder tippe dein Anliegen – gerne auf Schweizerdeutsch. Oder wähle ein Beispiel:</p>
+      <button class="sample" onclick="send(this.textContent.slice(2).trim())">🎙 Grüezi, min Outlook gaht sit hüt Morge nüme uf, es chunnt immer en Fehler.</button>
+      <button class="sample" onclick="send(this.textContent.slice(2).trim())">🎙 Hoi zäme, ich bruuch es neus Passwort, ich bi usgsperrt worde.</button>
+      <button class="sample" onclick="send(this.textContent.slice(2).trim())">🎙 Bi üs im ganze Büro gaht s Internet nüme – alli sind betroffe!</button>
+      <button class="sample" onclick="send(this.textContent.slice(2).trim())">🎙 Ich hätt gern es Notebook für en neue Mitarbeiter ab nächste Wuche.</button>
+    </div>
+  </div>
+  <aside>
+    <div class="eyebrow" style="margin-bottom:14px">ITSM · Ticket-Entwurf</div>
+    <div id="ticketPanel" style="color:var(--fog);font-size:13px;line-height:1.5">
+      Noch kein Ticket. ARIA befüllt dieses Panel automatisch, sobald genügend Informationen vorliegen.
+    </div>
+    <div id="nluPanel"></div>
+  </aside>
+</main>
+
+<footer>
+  <input id="input" placeholder="Sprechen (🎙) oder tippen – Schweizerdeutsch wird verstanden…" onkeydown="if(event.key==='Enter')send()">
+  <button id="micBtn" onclick="toggleMic()" title="Sprechen">🎙</button>
+  <button id="sendBtn" onclick="send()">Senden</button>
+</footer>
+
+<script>
+const SYSTEM_PROMPT = `Du bist ARIA, der KI-Voice-Agent der IT-Support-Hotline von OBT System Solutions (Schweiz). Anrufende sprechen oft Schweizerdeutsch – du verstehst Dialekt (auch fehlerhaft transkribiert: rate aus dem Kontext, was gemeint war), antwortest aber in freundlichem, natürlichem Schweizer Hochdeutsch.
+
+Gesprächsstil (wichtig, deine Antworten werden vorgelesen):
+- Maximal 2 kurze Sätze pro Antwort, gesprochene Sprache, keine Aufzählungen, keine Sonderzeichen.
+- Bestätige kurz, was du verstanden hast, bevor du fragst ("Verstanden, Outlook startet nicht mehr.").
+- Stelle pro Antwort genau EINE Rückfrage. Reihenfolge: 1. Name und Firma, 2. betroffenes System/Gerät, 3. seit wann / Fehlermeldung.
+- Wiederhole keine Fragen, deren Antwort schon im Gespräch steht.
+- Sobald Name, System und Symptom bekannt sind: Ticket erstellen, Ticketnummer nennen, nächsten Schritt erklären (z.B. "Ein Techniker meldet sich innert zwei Stunden.").
+
+Eskalation (eskalation=true, prioritaet=P1): ganze Firma/Abteilung betroffen, Server oder Netzwerk komplett down, Verdacht auf Sicherheitsvorfall (Phishing, Verschlüsselung, verdächtige Logins). Dann sofort: "Ich eskaliere das direkt an unseren Service Desk, Sie werden umgehend zurückgerufen."
+
+Prioritäten: P1 = Totalausfall/viele Betroffene/Security, P2 = Einzelperson arbeitsunfähig, P3 = beeinträchtigt aber arbeitsfähig, P4 = Anfrage/Bestellung.
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown, ohne Backticks:
+{"reply":"...","intent":"incident | service_request | frage | smalltalk | unklar","ticket":{"status":"entwurf | erstellt | nicht_noetig","nummer":"INC0012345 (nur wenn status=erstellt, frei erfinden)","kurzbeschreibung":"...","kategorie":"Workplace | Netzwerk | Applikation | Account/Zugriff | Drucker | Sonstiges","prioritaet":"P1 | P2 | P3 | P4","anrufer":"...","details":"..."},"eskalation":true,"konfidenz":0.9}`;
+
+let apiKey = sessionStorage.getItem("aria_key") || "";
+let elKey = sessionStorage.getItem("aria_el") || "";
+let oaKey = sessionStorage.getItem("aria_oa") || "";
+let history = [];
+let busy = false, ttsOn = true, listening = false, recog = null, secs = 0;
+let mediaRec = null, audioChunks = [];
+
+if (apiKey) document.getElementById("keyOverlay").style.display = "none";
+
+function saveKey() {
+  const v = document.getElementById("keyInput").value.trim();
+  if (!v.startsWith("sk-ant")) { alert("Das sieht nicht nach einem gültigen Anthropic-Key aus (beginnt mit sk-ant-…)."); return; }
+  apiKey = v;
+  elKey = document.getElementById("elKeyInput").value.trim();
+  oaKey = document.getElementById("oaKeyInput").value.trim();
+  sessionStorage.setItem("aria_key", apiKey);
+  sessionStorage.setItem("aria_el", elKey);
+  sessionStorage.setItem("aria_oa", oaKey);
+  document.getElementById("keyOverlay").style.display = "none";
+}
+
+setInterval(() => {
+  secs++;
+  document.getElementById("timer").textContent =
+    String(Math.floor(secs/60)).padStart(2,"0") + ":" + String(secs%60).padStart(2,"0");
+}, 1000);
+
+function toggleTTS() {
+  ttsOn = !ttsOn;
+  if (!ttsOn) speechSynthesis.cancel();
+  const b = document.getElementById("ttsToggle");
+  b.textContent = ttsOn ? "🔊 Ein" : "🔇 Aus";
+  b.classList.toggle("off", !ttsOn);
+}
+
+let currentAudio = null;
+async function speak(text) {
+  if (!ttsOn) return;
+  if (elKey) {
+    try {
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      const res = await fetch("https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL?output_format=mp3_44100_128", {
+        method: "POST",
+        headers: { "xi-api-key": elKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+        })
+      });
+      if (!res.ok) throw new Error("ElevenLabs " + res.status);
+      const blob = await res.blob();
+      currentAudio = new Audio(URL.createObjectURL(blob));
+      currentAudio.play();
+      return;
+    } catch (e) { console.warn("ElevenLabs-Fehler, Fallback auf Browser-TTS:", e); }
+  }
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const vs = speechSynthesis.getVoices();
+  u.voice = vs.find(v => v.lang === "de-CH") || vs.find(v => v.lang && v.lang.startsWith("de")) || null;
+  u.lang = u.voice ? u.voice.lang : "de-DE";
+  u.rate = 1.02;
+  speechSynthesis.speak(u);
+}
+
+function toggleMic() {
+  if (oaKey) { toggleWhisper(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert("Dieser Browser unterstützt keine Spracherkennung – bitte Chrome/Edge verwenden oder einen OpenAI-Key für Whisper hinterlegen."); return; }
+  if (listening) { recog && recog.stop(); return; }
+  recog = new SR();
+  recog.lang = "de-CH";
+  recog.interimResults = true;
+  recog.continuous = false;
+  let finalText = "";
+  recog.onresult = e => {
+    let interim = "";
+    for (const r of e.results) { if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
+    document.getElementById("input").value = finalText + interim;
+  };
+  recog.onend = () => {
+    setListening(false);
+    if (finalText.trim()) send(finalText.trim());
+  };
+  recog.onerror = () => setListening(false);
+  speechSynthesis.cancel();
+  setListening(true);
+  recog.start();
+}
+
+async function toggleWhisper() {
+  if (listening) { mediaRec && mediaRec.state !== "inactive" && mediaRec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (currentAudio) currentAudio.pause();
+    speechSynthesis && speechSynthesis.cancel();
+    audioChunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = e => audioChunks.push(e.data);
+    mediaRec.onstop = async () => {
+      setListening(false);
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(audioChunks, { type: mediaRec.mimeType || "audio/webm" });
+      if (blob.size < 1000) return;
+      document.getElementById("input").value = "⏳ Whisper transkribiert…";
+      try {
+        const fd = new FormData();
+        fd.append("file", blob, "audio.webm");
+        fd.append("model", "whisper-1");
+        fd.append("language", "de");
+        fd.append("prompt", "Schweizerdeutsches Gespräch mit einer IT-Support-Hotline. Begriffe: Outlook, Passwort, Server, Ticket, Notebook, VPN.");
+        const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + oaKey },
+          body: fd
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        document.getElementById("input").value = "";
+        if (data.text && data.text.trim()) send(data.text.trim());
+      } catch (e) {
+        document.getElementById("input").value = "";
+        alert("Whisper-Fehler: " + e.message);
+      }
+    };
+    setListening(true);
+    mediaRec.start();
+  } catch (e) {
+    alert("Mikrofon-Zugriff fehlgeschlagen: " + e.message);
+  }
+}
+
+function setListening(on) {
+  listening = on;
+  document.getElementById("micBtn").classList.toggle("listening", on);
+  document.getElementById("wave").classList.toggle("active", on || busy);
+}
+
+function addMsg(role, text) {
+  const w = document.getElementById("welcome");
+  if (w) w.remove();
+  const d = document.createElement("div");
+  d.className = "msg " + (role === "user" ? "user" : "aria");
+  d.innerHTML = '<div class="who">' + (role === "user" ? "Anrufer" : "ARIA") + '</div><div class="bubble"></div>';
+  d.querySelector(".bubble").textContent = text;
+  document.getElementById("transcript").appendChild(d);
+  d.scrollIntoView({ behavior: "smooth" });
+}
+
+function prioColor(p) { return p === "P1" ? "var(--red)" : p === "P2" ? "var(--amber)" : "var(--fog)"; }
+
+function renderTicket(t) {
+  if (!t || t.status === "nicht_noetig") return;
+  const el = document.getElementById("ticketPanel");
+  el.style.color = ""; el.style.fontSize = "";
+  el.innerHTML =
+    '<div style="margin-bottom:12px"><span style="font-weight:800;font-size:16px">' + (t.nummer || "— Entwurf —") + '</span>' +
+    '<span class="prio" style="background:' + prioColor(t.prioritaet) + '">' + (t.prioritaet || "") + '</span></div>' +
+    field("Status", t.status === "erstellt" ? "✓ Erstellt" : "In Erfassung") +
+    field("Kurzbeschreibung", t.kurzbeschreibung) +
+    field("Kategorie", t.kategorie) +
+    field("Anrufer", t.anrufer) +
+    field("Details", t.details);
+}
+
+function renderNLU(intent, esk, konf) {
+  document.getElementById("nluPanel").innerHTML =
+    '<div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--soft)">' +
+    '<div class="eyebrow" style="margin-bottom:10px">NLU-Analyse</div>' +
+    field("Intent", intent) +
+    field("Konfidenz", Math.round((konf || 0) * 100) + " %") +
+    (esk ? '<div class="esk">⚠ Eskalation an Service Desk ausgelöst</div>' : "") +
+    '</div>';
+}
+
+function field(lbl, val) {
+  const d = document.createElement("div");
+  d.textContent = val || "–";
+  return '<div class="field"><div class="lbl">' + lbl + '</div><div class="val">' + d.innerHTML + '</div></div>';
+}
+
+async function send(text) {
+  const inp = document.getElementById("input");
+  const userText = (text || inp.value).trim();
+  if (!userText || busy) return;
+  if (!apiKey) { document.getElementById("keyOverlay").style.display = "grid"; return; }
+  inp.value = "";
+  addMsg("user", userText);
+  history.push({ role: "user", content: userText });
+  busy = true;
+  document.getElementById("sendBtn").disabled = true;
+  document.getElementById("wave").classList.add("active");
+  const typing = document.createElement("div");
+  typing.className = "typing"; typing.textContent = "ARIA verarbeitet die Eingabe…";
+  document.getElementById("transcript").appendChild(typing);
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-opus-4-8",
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: history
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || "API-Fehler");
+    const raw = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+    let p;
+    try { p = JSON.parse(raw.replace(/```json|```/g, "").trim()); }
+    catch { p = { reply: raw || "Entschuldigung, können Sie das wiederholen?", intent: "unklar", ticket: null, eskalation: false, konfidenz: 0 }; }
+    history.push({ role: "assistant", content: raw });
+    addMsg("assistant", p.reply);
+    speak(p.reply);
+    renderTicket(p.ticket);
+    renderNLU(p.intent, p.eskalation, p.konfidenz);
+  } catch (e) {
+    addMsg("assistant", "Fehler: " + e.message + (e.message.includes("authentication") ? " – API-Key prüfen." : ""));
+  } finally {
+    typing.remove();
+    busy = false;
+    document.getElementById("sendBtn").disabled = false;
+    document.getElementById("wave").classList.toggle("active", listening);
+  }
+}
+
+// Stimmen vorladen (Chrome lädt sie asynchron)
+if ("speechSynthesis" in window) speechSynthesis.getVoices();
+</script>
+</body>
+</html>
